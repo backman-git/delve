@@ -89,8 +89,6 @@ const (
 	// variableTrustLen means that when this variable is loaded its length
 	// should be trusted and used instead of MaxArrayValues
 	variableTrustLen
-
-	variableSaved
 )
 
 // Variable represents a variable. It contains the address, name,
@@ -511,7 +509,7 @@ func (g *G) UserCurrent() Location {
 		frame := it.Frame()
 		if frame.Call.Fn != nil {
 			name := frame.Call.Fn.Name
-			if strings.Contains(name, ".") && (!strings.HasPrefix(name, "runtime.") || frame.Call.Fn.exportedRuntime()) && !strings.HasPrefix(name, "internal/") && !strings.HasPrefix(name, "runtime/internal") && !strings.HasPrefix(name, "iter.") {
+			if strings.Contains(name, ".") && (!strings.HasPrefix(name, "runtime.") || frame.Call.Fn.exportedRuntime()) && !strings.HasPrefix(name, "internal/") && !strings.HasPrefix(name, "runtime/internal") {
 				return frame.Call
 			}
 		}
@@ -1237,7 +1235,7 @@ func (v *Variable) maybeDereference() *Variable {
 
 	switch t := v.RealType.(type) {
 	case *godwarf.PtrType:
-		if (v.Addr == 0 || v.Flags&VariableFakeAddress != 0) && len(v.Children) == 1 && v.loaded {
+		if v.Addr == 0 && len(v.Children) == 1 && v.loaded {
 			// fake pointer variable constructed by casting an integer to a pointer type
 			return &v.Children[0]
 		}
@@ -1471,7 +1469,7 @@ func convertToEface(srcv, dstv *Variable) error {
 	}
 	typeAddr, typeKind, runtimeTypeFound, err := dwarfToRuntimeType(srcv.bi, srcv.mem, srcv.RealType)
 	if err != nil {
-		return fmt.Errorf("can not convert value of type %s to %s: %v", srcv.DwarfType.String(), dstv.DwarfType.String(), err)
+		return err
 	}
 	if !runtimeTypeFound || typeKind&kindDirectIface == 0 {
 		return &typeConvErr{srcv.DwarfType, dstv.RealType}

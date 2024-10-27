@@ -141,11 +141,11 @@ If locspec is omitted a breakpoint will be set on the current line.
 
 If you would like to assign a name to the breakpoint you can do so with the form:
 
-	break mybpname main.go:4
+  break mybpname main.go:4
 
 Finally, you can assign a condition to the newly created breakpoint by using the 'if' postfix form, like so:
 
-	break main.go:55 if i == 5
+  break main.go:55 if i == 5
 
 Alternatively you can set a condition on a breakpoint after created by using the 'on' command.
 
@@ -248,7 +248,7 @@ Current limitations:
 If called with the locspec argument it will delete all the breakpoints matching the locspec. If locspec is omitted all breakpoints are deleted.`},
 		{aliases: []string{"toggle"}, group: breakCmds, cmdFn: toggle, helpMsg: `Toggles on or off a breakpoint.
 
-	toggle <breakpoint name or id>`},
+toggle <breakpoint name or id>`},
 		{aliases: []string{"goroutines", "grs"}, group: goroutineCmds, cmdFn: c.goroutines, helpMsg: `List program goroutines.
 
 	goroutines [-u|-r|-g|-s] [-t [depth]] [-l] [-with loc expr] [-without loc expr] [-group argument] [-chan expr] [-exec command]
@@ -586,7 +586,7 @@ Examine memory:
 	examinemem [-fmt <format>] [-count|-len <count>] [-size <size>] <address>
 	examinemem [-fmt <format>] [-count|-len <count>] [-size <size>] -x <expression>
 
-Format represents the data format and the value is one of this list (default hex): bin(binary), oct(octal), dec(decimal), hex(hexadecimal) and raw.
+Format represents the data format and the value is one of this list (default hex): bin(binary), oct(octal), dec(decimal), hex(hexadecimal).
 Length is the number of bytes (default 1) and must be less than or equal to 1000.
 Address is the memory location of the target to examine. Please note '-len' is deprecated by '-count and -size'.
 Expression can be an integer expression or pointer value of the memory location to examine.
@@ -2057,10 +2057,9 @@ func examineMemoryCmd(t *Term, ctx callContext, argstr string) error {
 
 	// Default value
 	priFmt := byte('x')
-	count := int64(1)
-	size := int64(1)
+	count := 1
+	size := 1
 	isExpr := false
-	rawout := false
 
 	// nextArg returns the next argument that is not an empty string, if any, and
 	// advances the args slice to the position after that.
@@ -2086,23 +2085,19 @@ loop:
 			if arg == "" {
 				return errors.New("expected argument after -fmt")
 			}
-			if arg == "raw" {
-				rawout = true
-			} else {
-				fmtMapToPriFmt := map[string]byte{
-					"oct":         'o',
-					"octal":       'o',
-					"hex":         'x',
-					"hexadecimal": 'x',
-					"dec":         'd',
-					"decimal":     'd',
-					"bin":         'b',
-					"binary":      'b',
-				}
-				priFmt, ok = fmtMapToPriFmt[arg]
-				if !ok {
-					return fmt.Errorf("%q is not a valid format", arg)
-				}
+			fmtMapToPriFmt := map[string]byte{
+				"oct":         'o',
+				"octal":       'o',
+				"hex":         'x',
+				"hexadecimal": 'x',
+				"dec":         'd',
+				"decimal":     'd',
+				"bin":         'b',
+				"binary":      'b',
+			}
+			priFmt, ok = fmtMapToPriFmt[arg]
+			if !ok {
+				return fmt.Errorf("%q is not a valid format", arg)
 			}
 		case "-count", "-len":
 			arg := nextArg()
@@ -2110,7 +2105,7 @@ loop:
 				return errors.New("expected argument after -count/-len")
 			}
 			var err error
-			count, err = strconv.ParseInt(arg, 0, 64)
+			count, err = strconv.Atoi(arg)
 			if err != nil || count <= 0 {
 				return errors.New("count/len must be a positive integer")
 			}
@@ -2120,7 +2115,7 @@ loop:
 				return errors.New("expected argument after -size")
 			}
 			var err error
-			size, err = strconv.ParseInt(arg, 0, 64)
+			size, err = strconv.Atoi(arg)
 			if err != nil || size <= 0 || size > 8 {
 				return errors.New("size must be a positive integer (<=8)")
 			}
@@ -2134,6 +2129,11 @@ loop:
 			args = []string{cmd}
 			break loop // only one arg left to be evaluated as a uint
 		}
+	}
+
+	// TODO, maybe configured by user.
+	if count*size > 1000 {
+		return errors.New("read memory range (count*size) must be less than or equal to 1000 bytes")
 	}
 
 	if len(args) == 0 {
@@ -2169,28 +2169,12 @@ loop:
 		}
 	}
 
-	t.stdout.pw.PageMaybe(nil)
-
-	start := address
-	remsz := int(count * size)
-
-	for remsz > 0 {
-		reqsz := rpc2.ExamineMemoryLengthLimit
-		if reqsz > remsz {
-			reqsz = remsz
-		}
-		memArea, isLittleEndian, err := t.client.ExamineMemory(start, reqsz)
-		if err != nil {
-			return err
-		}
-		if rawout {
-			t.stdout.Write(memArea)
-		} else {
-			fmt.Fprint(t.stdout, api.PrettyExamineMemory(uintptr(start), memArea, isLittleEndian, priFmt, int(size)))
-		}
-		start += uint64(reqsz)
-		remsz -= reqsz
+	memArea, isLittleEndian, err := t.client.ExamineMemory(address, count*size)
+	if err != nil {
+		return err
 	}
+	t.stdout.pw.PageMaybe(nil)
+	fmt.Fprint(t.stdout, api.PrettyExamineMemory(uintptr(address), memArea, isLittleEndian, priFmt, size))
 	return nil
 }
 

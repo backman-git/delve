@@ -1211,11 +1211,12 @@ func TestBreakpointCounts(t *testing.T) {
 		bp := setFileBreakpoint(p, t, fixture.Source, 12)
 
 		for {
-			err := grp.Continue()
-			if errors.As(err, &proc.ErrProcessExited{}) {
-				break
+			if err := grp.Continue(); err != nil {
+				if _, exited := err.(proc.ErrProcessExited); exited {
+					break
+				}
+				assertNoError(err, t, "Continue()")
 			}
-			assertNoError(err, t, "Continue()")
 		}
 
 		t.Logf("TotalHitCount: %d", bp.Logical.TotalHitCount)
@@ -1240,11 +1241,12 @@ func TestHardcodedBreakpointCounts(t *testing.T) {
 	withTestProcess("hcbpcountstest", t, func(p *proc.Target, grp *proc.TargetGroup, fixture protest.Fixture) {
 		counts := map[int64]int{}
 		for {
-			err := grp.Continue()
-			if errors.As(err, &proc.ErrProcessExited{}) {
-				break
+			if err := grp.Continue(); err != nil {
+				if _, exited := err.(proc.ErrProcessExited); exited {
+					break
+				}
+				assertNoError(err, t, "Continue()")
 			}
-			assertNoError(err, t, "Continue()")
 
 			for _, th := range p.ThreadList() {
 				bp := th.Breakpoint().Breakpoint
@@ -1296,11 +1298,12 @@ func TestBreakpointCountsWithDetection(t *testing.T) {
 		bp := setFileBreakpoint(p, t, fixture.Source, 12)
 
 		for {
-			err := grp.Continue()
-			if errors.As(err, &proc.ErrProcessExited{}) {
-				break
+			if err := grp.Continue(); err != nil {
+				if _, exited := err.(proc.ErrProcessExited); exited {
+					break
+				}
+				assertNoError(err, t, "Continue()")
 			}
-			assertNoError(err, t, "Continue()")
 			for _, th := range p.ThreadList() {
 				if bp := th.Breakpoint(); bp.Breakpoint == nil {
 					continue
@@ -1523,16 +1526,16 @@ func TestCondBreakpointError(t *testing.T) {
 
 		err = grp.Continue()
 		if err != nil {
-			if !errors.As(err, &proc.ErrProcessExited{}) {
+			if _, exited := err.(proc.ErrProcessExited); !exited {
 				t.Fatalf("Unexpected error on second Continue(): %v", err)
 			}
-			return
-		}
-		nvar := evalVariable(p, t, "n")
+		} else {
+			nvar := evalVariable(p, t, "n")
 
-		n, _ := constant.Int64Val(nvar.Value)
-		if n != 7 {
-			t.Fatalf("Stopped on wrong goroutine %d\n", n)
+			n, _ := constant.Int64Val(nvar.Value)
+			if n != 7 {
+				t.Fatalf("Stopped on wrong goroutine %d\n", n)
+			}
 		}
 	})
 }
@@ -1729,8 +1732,10 @@ func TestIssue414(t *testing.T) {
 			} else {
 				err = grp.Next()
 			}
-			if errors.As(err, &proc.ErrProcessExited{}) {
-				break
+			if err != nil {
+				if _, exited := err.(proc.ErrProcessExited); exited {
+					break
+				}
 			}
 			assertNoError(err, t, "Step()")
 		}
@@ -1799,12 +1804,13 @@ func TestCmdLineArgs(t *testing.T) {
 		if bp.Breakpoint != nil && bp.Logical.Name == proc.UnrecoveredPanic {
 			t.Fatalf("testing args failed on unrecovered-panic breakpoint: %v", bp)
 		}
-		var exit proc.ErrProcessExited
-		if !errors.As(err, &exit) {
+		exit, exited := err.(proc.ErrProcessExited)
+		if !exited {
 			t.Fatalf("Process did not exit: %v", err)
-		}
-		if exit.Status != 0 {
-			t.Fatalf("process exited with invalid status %d", exit.Status)
+		} else {
+			if exit.Status != 0 {
+				t.Fatalf("process exited with invalid status %d", exit.Status)
+			}
 		}
 	}
 
@@ -2780,7 +2786,7 @@ func TestDebugStripped(t *testing.T) {
 	skipOn(t, "not working on linux/386", "linux", "386")
 	skipOn(t, "not working on linux/ppc64le when -gcflags=-N -l is passed", "linux", "ppc64le")
 	ver, _ := goversion.Parse(runtime.Version())
-	if ver.IsDevelBuild() {
+	if ver.IsDevel() {
 		t.Skip("not supported")
 	}
 	withTestProcessArgs("testnextprog", t, "", []string{}, protest.LinkStrip, func(p *proc.Target, grp *proc.TargetGroup, f protest.Fixture) {
@@ -2808,9 +2814,8 @@ func TestDebugStripped2(t *testing.T) {
 	skipOn(t, "not working on freebsd", "freebsd")
 	skipOn(t, "not working on linux/386", "linux", "386")
 	skipOn(t, "not working on linux/ppc64le when -gcflags=-N -l is passed", "linux", "ppc64le")
-	skipOn(t, "not working on linux/riscv64", "linux", "riscv64")
 	ver, _ := goversion.Parse(runtime.Version())
-	if ver.IsDevelBuild() {
+	if ver.IsDevel() {
 		t.Skip("not supported")
 	}
 	if ver.Major > 0 && ver.AfterOrEqual(goversion.GoVersion{Major: 1, Minor: 22, Rev: -1}) {
@@ -2956,7 +2961,6 @@ func TestCgoStacktrace(t *testing.T) {
 	skipOn(t, "broken - cgo stacktraces", "386")
 	skipOn(t, "broken - cgo stacktraces", "windows", "arm64")
 	skipOn(t, "broken - cgo stacktraces", "linux", "ppc64le")
-	skipOn(t, "broken - cgo stacktraces", "linux", "riscv64")
 	if !goversion.VersionAfterOrEqual(runtime.Version(), 1, 21) {
 		skipOn(t, "broken - cgo stacktraces", "windows", "arm64")
 	}
@@ -3345,7 +3349,6 @@ func TestHaltKeepsSteppingBreakpoints(t *testing.T) {
 func TestDisassembleGlobalVars(t *testing.T) {
 	skipOn(t, "broken - global variable symbolication", "arm64")   // On ARM64 symLookup can't look up variables due to how they are loaded, see issue #1778
 	skipOn(t, "broken - global variable symbolication", "ppc64le") // See comment on ARM64 above.
-	skipOn(t, "broken - global variable symbolication", "riscv64")
 	// On 386 linux when pie, the generated code use __x86.get_pc_thunk to ensure position-independent.
 	// Locate global variable by
 	//    `CALL __x86.get_pc_thunk.ax(SB) 0xb0f7f
@@ -3637,7 +3640,6 @@ func TestIssue951(t *testing.T) {
 
 func TestDWZCompression(t *testing.T) {
 	skipOn(t, "broken", "ppc64le")
-	skipOn(t, "broken", "riscv64")
 	// If dwz is not available in the system, skip this test
 	if _, err := exec.LookPath("dwz"); err != nil {
 		t.Skip("dwz not installed")
@@ -4200,7 +4202,6 @@ func TestCgoStacktrace2(t *testing.T) {
 	skipOn(t, "broken", "386")
 	skipOn(t, "broken - cgo stacktraces", "darwin", "arm64")
 	skipOn(t, "broken", "ppc64le")
-	skipOn(t, "broken", "riscv64")
 	protest.MustHaveCgo(t)
 	// If a panic happens during cgo execution the stacktrace should show the C
 	// function that caused the problem.
@@ -4441,10 +4442,14 @@ func TestStepOutPreservesGoroutine(t *testing.T) {
 		logState()
 
 		err = grp.StepOut()
-		if errors.As(err, &proc.ErrProcessExited{}) {
-			return
+		if err != nil {
+			_, isexited := err.(proc.ErrProcessExited)
+			if !isexited {
+				assertNoError(err, t, "StepOut()")
+			} else {
+				return
+			}
 		}
-		assertNoError(err, t, "StepOut()")
 
 		logState()
 
@@ -4740,7 +4745,6 @@ func TestWatchpointsBasic(t *testing.T) {
 	skipOn(t, "not implemented", "freebsd")
 	skipOn(t, "not implemented", "386")
 	skipOn(t, "not implemented", "ppc64le")
-	skipOn(t, "not implemented", "riscv64")
 	skipOn(t, "see https://github.com/go-delve/delve/issues/2768", "windows")
 	protest.AllowRecording(t)
 
@@ -4797,7 +4801,6 @@ func TestWatchpointCounts(t *testing.T) {
 	skipOn(t, "not implemented", "386")
 	skipOn(t, "see https://github.com/go-delve/delve/issues/2768", "windows")
 	skipOn(t, "not implemented", "ppc64le")
-	skipOn(t, "not implemented", "riscv64")
 	if _, isTeamCityTest := os.LookupEnv("TEAMCITY_VERSION"); isTeamCityTest {
 		skipOn(t, "CI is running a version of macOS that is too old (11.2)", "darwin", "arm64")
 	}
@@ -4814,11 +4817,12 @@ func TestWatchpointCounts(t *testing.T) {
 		assertNoError(err, t, "SetWatchpoint(write-only)")
 
 		for {
-			err := grp.Continue()
-			if errors.As(err, &proc.ErrProcessExited{}) {
-				break
+			if err := grp.Continue(); err != nil {
+				if errors.As(err, &proc.ErrProcessExited{}) {
+					break
+				}
+				assertNoError(err, t, "Continue()")
 			}
-			assertNoError(err, t, "Continue()")
 		}
 
 		t.Logf("TotalHitCount: %d", bp.Logical.TotalHitCount)
@@ -4915,7 +4919,6 @@ func TestWatchpointStack(t *testing.T) {
 	skipOn(t, "not implemented", "freebsd")
 	skipOn(t, "not implemented", "386")
 	skipOn(t, "not implemented", "ppc64le")
-	skipOn(t, "not implemented", "riscv64")
 	skipOn(t, "see https://github.com/go-delve/delve/issues/2768", "windows")
 	if _, isTeamCityTest := os.LookupEnv("TEAMCITY_VERSION"); isTeamCityTest {
 		skipOn(t, "CI is running a version of macOS that is too old (11.2)", "darwin", "arm64")
@@ -5074,8 +5077,6 @@ func TestNilPtrDerefInBreakInstr(t *testing.T) {
 		asmfile = "main_386.s"
 	case "ppc64le":
 		asmfile = "main_ppc64le.s"
-	case "riscv64":
-		asmfile = "main_riscv64.s"
 	default:
 		t.Fatalf("assembly file for %s not provided", runtime.GOARCH)
 	}
@@ -5136,10 +5137,13 @@ func TestFollowExec(t *testing.T) {
 		for {
 			t.Log("Continuing")
 			err := grp.Continue()
-			if errors.As(err, &proc.ErrProcessExited{}) {
-				break
+			if err != nil {
+				_, isexited := err.(proc.ErrProcessExited)
+				if isexited {
+					break
+				}
+				assertNoError(err, t, "Continue")
 			}
-			assertNoError(err, t, "Continue")
 
 			if first {
 				first = false
@@ -5309,11 +5313,12 @@ func TestFollowExecRegexFilter(t *testing.T) {
 		assertNoError(grp.Continue(), t, "Continue 3")
 		assertFunctionName(grp.Selected, t, "main.traceme3", "Program did not continue to the expected location (3)")
 		err := grp.Continue()
-		if errors.As(err, &proc.ErrProcessExited{}) {
-			return
-		}
-		assertNoError(err, t, "Continue 4")
-		if err == nil {
+		if err != nil {
+			_, isexited := err.(proc.ErrProcessExited)
+			if !isexited {
+				assertNoError(err, t, "Continue 4")
+			}
+		} else {
 			t.Fatal("process did not exit after 4 continues")
 		}
 	})

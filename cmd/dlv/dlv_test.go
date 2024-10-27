@@ -83,15 +83,23 @@ func projectRoot() string {
 
 func TestBuild(t *testing.T) {
 	const listenAddr = "127.0.0.1:40573"
+	var err error
 
-	dlvbin := getDlvBin(t)
+	cmd := exec.Command("go", "run", "_scripts/make.go", "build")
+	cmd.Dir = projectRoot()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("makefile error: %v\noutput %s\n", err, string(out))
+	}
+
+	dlvbin := filepath.Join(cmd.Dir, "dlv")
 	defer os.Remove(dlvbin)
 
 	fixtures := protest.FindFixturesDir()
 
 	buildtestdir := filepath.Join(fixtures, "buildtest")
 
-	cmd := exec.Command(dlvbin, "debug", "--headless=true", "--listen="+listenAddr, "--api-version=2", "--backend="+testBackend, "--log", "--log-output=debugger,rpc")
+	cmd = exec.Command(dlvbin, "debug", "--headless=true", "--listen="+listenAddr, "--api-version=2", "--backend="+testBackend, "--log", "--log-output=debugger,rpc")
 	cmd.Dir = buildtestdir
 	stderr, err := cmd.StderrPipe()
 	assertNoError(err, t, "stderr pipe")
@@ -206,9 +214,6 @@ func getDlvBin(t *testing.T) string {
 	}
 	if runtime.GOOS == "linux" && runtime.GOARCH == "ppc64le" {
 		tags = "-tags=exp.linuxppc64le"
-	}
-	if runtime.GOOS == "linux" && runtime.GOARCH == "riscv64" {
-		tags = "-tags=exp.linuxriscv64"
 	}
 	return getDlvBinInternal(t, tags)
 }
@@ -397,9 +402,6 @@ func TestGeneratedDoc(t *testing.T) {
 	if runtime.GOOS == "linux" && runtime.GOARCH == "ppc64le" {
 		//TODO(alexsaezm): finish CI integration
 		t.Skip("skipping test on Linux/PPC64LE in CI")
-	}
-	if goversion.VersionAfterOrEqual(runtime.Version(), 1, 24) {
-		t.Skip("disabled due to export format changes")
 	}
 	// Checks gen-cli-docs.go
 	var generatedBuf bytes.Buffer
@@ -920,53 +922,6 @@ func TestDAPCmdWithClient(t *testing.T) {
 	}
 }
 
-// TestDAPCmdWithUnixClient tests dlv dap --client-addr can be started with unix domain socket and shut down.
-func TestDAPCmdWithUnixClient(t *testing.T) {
-	tmpdir := os.TempDir()
-	if tmpdir == "" {
-		return
-	}
-
-	listenPath := filepath.Join(tmpdir, "dap_test")
-	listener, err := net.Listen("unix", listenPath)
-	if err != nil {
-		t.Fatalf("cannot setup listener required for testing: %v", err)
-	}
-	defer listener.Close()
-
-	dlvbin := getDlvBin(t)
-
-	cmd := exec.Command(dlvbin, "dap", "--log-output=dap", "--log", "--client-addr=unix:"+listener.Addr().String())
-	buf := &bytes.Buffer{}
-	cmd.Stdin = buf
-	cmd.Stdout = buf
-	assertNoError(cmd.Start(), t, "start dlv dap process with --client-addr flag")
-
-	// Wait for the connection.
-	conn, err := listener.Accept()
-	if err != nil {
-		cmd.Process.Kill() // release the socket file
-		t.Fatalf("Failed to get connection: %v", err)
-	}
-	t.Log("dlv dap process dialed in successfully")
-
-	client := daptest.NewClientFromConn(conn)
-	client.InitializeRequest()
-	client.ExpectInitializeResponse(t)
-
-	// Close the connection.
-	if err := conn.Close(); err != nil {
-		cmd.Process.Kill()
-		t.Fatalf("Failed to get connection: %v", err)
-	}
-
-	// Connection close should trigger dlv-reverse command's normal exit.
-	if err := cmd.Wait(); err != nil {
-		cmd.Process.Kill()
-		t.Fatalf("command failed: %v\n%s\n%v", err, buf.Bytes(), cmd.Process.Pid)
-	}
-}
-
 func TestTrace(t *testing.T) {
 	dlvbin := getDlvBin(t)
 
@@ -1410,6 +1365,9 @@ func TestVersion(t *testing.T) {
 }
 
 func TestStaticcheck(t *testing.T) {
+	if goversion.VersionAfterOrEqual(runtime.Version(), 1, 23) {
+		t.Skip("staticcheck does not support go1.23 yet")
+	}
 	_, err := exec.LookPath("staticcheck")
 	if err != nil {
 		t.Skip("staticcheck not installed")
@@ -1475,14 +1433,23 @@ func TestUnixDomainSocket(t *testing.T) {
 
 	listenPath := filepath.Join(tmpdir, "delve_test")
 
-	dlvbin := getDlvBin(t)
+	var err error
+
+	cmd := exec.Command("go", "run", "_scripts/make.go", "build")
+	cmd.Dir = projectRoot()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("makefile error: %v\noutput %s\n", err, string(out))
+	}
+
+	dlvbin := filepath.Join(cmd.Dir, "dlv")
 	defer os.Remove(dlvbin)
 
 	fixtures := protest.FindFixturesDir()
 
 	buildtestdir := filepath.Join(fixtures, "buildtest")
 
-	cmd := exec.Command(dlvbin, "debug", "--headless=true", "--listen=unix:"+listenPath, "--api-version=2", "--backend="+testBackend, "--log", "--log-output=debugger,rpc")
+	cmd = exec.Command(dlvbin, "debug", "--headless=true", "--listen=unix:"+listenPath, "--api-version=2", "--backend="+testBackend, "--log", "--log-output=debugger,rpc")
 	cmd.Dir = buildtestdir
 	stderr, err := cmd.StderrPipe()
 	assertNoError(err, t, "stderr pipe")

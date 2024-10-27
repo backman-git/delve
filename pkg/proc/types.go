@@ -149,15 +149,9 @@ func resolveParametricType(bi *BinaryInfo, mem MemoryReadWriter, t godwarf.Type,
 	}
 	_type := newVariable("", rtypeAddr, runtimeType, bi, mem)
 
-	var mds []ModuleData
-	if bi.moduleDataCache != nil {
-		mds = bi.moduleDataCache
-	} else {
-		mds, err = LoadModuleData(bi, _type.mem)
-		if err != nil {
-			return ptyp.TypedefType.Type, fmt.Errorf("error loading module data: %v", err)
-		}
-		bi.moduleDataCache = mds
+	mds, err := LoadModuleData(bi, _type.mem)
+	if err != nil {
+		return ptyp.TypedefType.Type, fmt.Errorf("error loading module data: %v", err)
 	}
 
 	typ, _, err := RuntimeTypeToDIE(_type, 0, mds)
@@ -206,10 +200,7 @@ func dwarfToRuntimeType(bi *BinaryInfo, mem MemoryReadWriter, typ godwarf.Type) 
 	if kindv == nil || kindv.Unreadable != nil || kindv.Kind != reflect.Uint {
 		kindv = _type.loadFieldNamed("Kind_")
 	}
-	if kindv == nil {
-		return 0, 0, false, fmt.Errorf("unreadable interace type (no kind field)")
-	}
-	if kindv.Unreadable != nil || kindv.Kind != reflect.Uint {
+	if kindv == nil || kindv.Unreadable != nil || kindv.Kind != reflect.Uint {
 		return 0, 0, false, fmt.Errorf("unreadable interface type: %v", kindv.Unreadable)
 	}
 	typeKind, _ = constant.Uint64Val(kindv.Value)

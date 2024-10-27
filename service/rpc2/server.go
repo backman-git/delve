@@ -977,10 +977,8 @@ type ExaminedMemoryOut struct {
 	IsLittleEndian bool
 }
 
-const ExamineMemoryLengthLimit = 1 << 16
-
 func (s *RPCServer) ExamineMemory(arg ExamineMemoryIn, out *ExaminedMemoryOut) error {
-	if arg.Length > ExamineMemoryLengthLimit {
+	if arg.Length > 1000 {
 		return errors.New("len must be less than or equal to 1000")
 	}
 	Mem, err := s.debugger.ExamineMemory(arg.Address, arg.Length)

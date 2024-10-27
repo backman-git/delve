@@ -158,7 +158,7 @@ func BuildFixture(name string, flags BuildFlags) Fixture {
 	if flags&BuildModeExternalLinker != 0 {
 		buildFlags = append(buildFlags, "-ldflags=-linkmode=external")
 	}
-	if ver.IsOldDevel() || ver.AfterOrEqual(goversion.GoVersion{Major: 1, Minor: 11, Rev: -1}) {
+	if ver.IsDevel() || ver.AfterOrEqual(goversion.GoVersion{Major: 1, Minor: 11, Rev: -1}) {
 		if flags&EnableDWZCompression != 0 {
 			buildFlags = append(buildFlags, "-ldflags=-compressdwarf=false")
 		}
@@ -310,9 +310,6 @@ func MustSupportFunctionCalls(t *testing.T, testBackend string) {
 	if runtime.GOARCH == "386" {
 		t.Skip(fmt.Errorf("%s does not support FunctionCall for now", runtime.GOARCH))
 	}
-	if runtime.GOARCH == "riscv64" {
-		t.Skip(fmt.Errorf("%s does not support FunctionCall for now", runtime.GOARCH))
-	}
 	if runtime.GOARCH == "arm64" {
 		if !goversion.VersionAfterOrEqual(runtime.Version(), 1, 19) || runtime.GOOS == "windows" {
 			t.Skip("this version of Go does not support function calls")
@@ -385,7 +382,7 @@ func RegabiSupported() bool {
 	// Tracks regabiSupported variable in ParseGOEXPERIMENT internal/buildcfg/exp.go
 	switch {
 	case goversion.VersionAfterOrEqual(runtime.Version(), 1, 18):
-		return runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" || runtime.GOARCH == "ppc64le" || runtime.GOARCH == "ppc64" || runtime.GOARCH == "riscv64"
+		return runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" || runtime.GOARCH == "ppc64le" || runtime.GOARCH == "ppc64"
 	case goversion.VersionAfterOrEqual(runtime.Version(), 1, 17):
 		return runtime.GOARCH == "amd64" && (runtime.GOOS == "android" || runtime.GOOS == "linux" || runtime.GOOS == "darwin" || runtime.GOOS == "windows")
 	default:

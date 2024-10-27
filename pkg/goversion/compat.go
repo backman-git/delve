@@ -21,7 +21,7 @@ var (
 // this version of delve.
 func Compatible(producer string, warnonly bool) error {
 	ver := ParseProducer(producer)
-	if ver.IsOldDevel() {
+	if ver.IsDevel() {
 		return nil
 	}
 	if !ver.AfterOrEqual(GoVersion{MinSupportedVersionOfGoMajor, MinSupportedVersionOfGoMinor, betaRev(0), "", ""}) {

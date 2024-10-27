@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1441,8 +1440,23 @@ func (d *Debugger) Sources(filter string) ([]string, error) {
 		}
 	}
 	sort.Strings(files)
-	files = slices.Compact(files)
+	files = uniq(files)
 	return files, nil
+}
+
+func uniq(s []string) []string {
+	if len(s) == 0 {
+		return s
+	}
+	src, dst := 1, 1
+	for src < len(s) {
+		if s[src] != s[dst-1] {
+			s[dst] = s[src]
+			dst++
+		}
+		src++
+	}
+	return s[:dst]
 }
 
 // Functions returns a list of functions in the target process.
@@ -1473,7 +1487,7 @@ func (d *Debugger) Functions(filter string, followCalls int) ([]string, error) {
 		}
 	}
 	sort.Strings(funcs)
-	funcs = slices.Compact(funcs)
+	funcs = uniq(funcs)
 	return funcs, nil
 }
 
@@ -1564,7 +1578,7 @@ func (d *Debugger) Types(filter string) ([]string, error) {
 		}
 	}
 	sort.Strings(r)
-	r = slices.Compact(r)
+	r = uniq(r)
 
 	return r, nil
 }

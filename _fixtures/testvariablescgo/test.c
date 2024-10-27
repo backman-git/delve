@@ -12,8 +12,6 @@
 #else
 #define BREAKPOINT asm("brk 0;")
 #endif
-#elif __riscv
-#define BREAKPOINT asm("ebreak;")
 #endif
 
 #define N 100
@@ -39,6 +37,6 @@ void testfn(void) {
 	strcpy(s, s0);
 
 	BREAKPOINT;
-
+	
 	printf("%s %s %p %p\n", s, longstring, v, v_align_check);
 }

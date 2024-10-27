@@ -14,8 +14,6 @@
 #else
 #define BREAKPOINT asm("brk 0;")
 #endif
-#elif __riscv
-#define BREAKPOINT asm("ebreak;")
 #endif
 
 void helloworld_pt2(int x) {

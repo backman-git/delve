@@ -97,9 +97,6 @@ func (v sliceAsStarlarkValue) Hash() (uint32, error) {
 }
 
 func (v sliceAsStarlarkValue) String() string {
-	if x, ok := v.v.Interface().([]byte); ok {
-		return string(x)
-	}
 	return fmt.Sprintf("%#v", v.v)
 }
 

@@ -71,10 +71,6 @@ const (
 	// If localsOnlyRangeBodyClosures is set simpleLocals only returns
 	// variables containing the range body closure.
 	localsOnlyRangeBodyClosures
-
-	// If localsIsRangeBody is set DW_AT_formal_parameter variables will be
-	// considered local variables.
-	localsIsRangeBody
 )
 
 // ConvertEvalScope returns a new EvalScope in the context of the
@@ -186,17 +182,9 @@ func GoroutineScope(t *Target, thread Thread) (*EvalScope, error) {
 	return FrameToScope(t, thread.ProcessMemory(), g, threadID, locations...), nil
 }
 
-func (scope *EvalScope) evalopFlags() evalop.Flags {
-	flags := evalop.Flags(0)
-	if scope.BinInfo.hasDebugPinner() {
-		flags |= evalop.HasDebugPinner
-	}
-	return flags
-}
-
 // EvalExpression returns the value of the given expression.
 func (scope *EvalScope) EvalExpression(expr string, cfg LoadConfig) (*Variable, error) {
-	ops, err := evalop.Compile(scopeToEvalLookup{scope}, expr, scope.evalopFlags())
+	ops, err := evalop.Compile(scopeToEvalLookup{scope}, expr, false)
 	if err != nil {
 		return nil, err
 	}
@@ -331,12 +319,7 @@ func (scope *EvalScope) Locals(flags localsFlags, wantedName string) ([]*Variabl
 		return vars2
 	}
 
-	rangeBodyFlags := localsFlags(0)
-	if scope.Fn != nil && scope.Fn.rangeParentName() != "" {
-		rangeBodyFlags = localsFlags(localsIsRangeBody)
-	}
-
-	vars0, err := scope.simpleLocals(flags|rangeBodyFlags, wantedName)
+	vars0, err := scope.simpleLocals(flags, wantedName)
 	if err != nil {
 		return nil, err
 	}
@@ -361,11 +344,7 @@ func (scope *EvalScope) Locals(flags localsFlags, wantedName string) ([]*Variabl
 			scope2 = FrameToScope(scope.target, scope.target.Memory(), scope.g, scope.threadID, scope.rangeFrames[2*i:]...)
 			scope.enclosingRangeScopes[i] = scope2
 		}
-		rangeBodyFlags := localsFlags(localsIsRangeBody)
-		if i == len(scope.enclosingRangeScopes)-1 {
-			rangeBodyFlags = 0
-		}
-		vars, err := scope2.simpleLocals(flags|rangeBodyFlags, wantedName)
+		vars, err := scope2.simpleLocals(flags, wantedName)
 		if err != nil {
 			return nil, err
 		}
@@ -398,9 +377,7 @@ func (scope *EvalScope) setupRangeFrames() error {
 	if err != nil {
 		return err
 	}
-	if len(scope.rangeFrames) > 0 {
-		scope.rangeFrames = scope.rangeFrames[2:] // skip the first frame and its return frame
-	}
+	scope.rangeFrames = scope.rangeFrames[2:] // skip the first frame and its return frame
 	scope.enclosingRangeScopes = make([]*EvalScope, len(scope.rangeFrames)/2)
 	return nil
 }
@@ -478,7 +455,7 @@ func (scope *EvalScope) simpleLocals(flags localsFlags, wantedName string) ([]*V
 		}
 		vars = append(vars, val)
 		depth := entry.Depth
-		if (flags&localsIsRangeBody == 0) && (entry.Tag == dwarf.TagFormalParameter) {
+		if entry.Tag == dwarf.TagFormalParameter {
 			if depth <= 1 {
 				depth = 0
 			}
@@ -650,7 +627,7 @@ func (scope *EvalScope) setValue(dstv, srcv *Variable, srcExpr string) error {
 
 // SetVariable sets the value of the named variable
 func (scope *EvalScope) SetVariable(name, value string) error {
-	ops, err := evalop.CompileSet(scopeToEvalLookup{scope}, name, value, scope.evalopFlags())
+	ops, err := evalop.CompileSet(scopeToEvalLookup{scope}, name, value)
 	if err != nil {
 		return err
 	}
@@ -836,13 +813,9 @@ type evalStack struct {
 	scope               *EvalScope
 	curthread           Thread
 	lastRetiredFncall   *functionCallState
-	debugPinner         *Variable
 }
 
 func (s *evalStack) push(v *Variable) {
-	if v == nil {
-		panic(errors.New("internal debugger error, nil pushed onto variables stack"))
-	}
 	s.stack = append(s.stack, v)
 }
 
@@ -956,7 +929,7 @@ func (stack *evalStack) run() {
 		stack.executeOp()
 		// If the instruction we just executed requests the call injection
 		// protocol by setting callInjectionContinue we switch to it.
-		if stack.callInjectionContinue && stack.err == nil {
+		if stack.callInjectionContinue {
 			scope.callCtx.injectionThread = nil
 			return
 		}
@@ -971,35 +944,25 @@ func (stack *evalStack) run() {
 	// injections before returning.
 
 	if len(stack.fncalls) > 0 {
-		fncallLog("undoing calls (%v)", stack.err)
 		fncall := stack.fncallPeek()
 		if fncall == stack.lastRetiredFncall {
 			stack.err = fmt.Errorf("internal debugger error: could not undo injected call during error recovery, original error: %v", stack.err)
 			return
 		}
 		if fncall.undoInjection != nil {
-			if fncall.undoInjection.doComplete2 {
-				// doComplete2 is set if CallInjectionComplete{DoPinning: true} has been
-				// executed but CallInjectionComplete2 hasn't.
-				regs, err := curthread.Registers()
-				if err == nil {
-					callInjectionComplete2(scope, scope.BinInfo, fncall, regs, curthread)
-				}
-			} else {
-				// undoInjection is set if evalop.CallInjectionSetTarget has been
-				// executed but evalop.CallInjectionComplete hasn't, we must undo the callOP
-				// call in evalop.CallInjectionSetTarget before continuing.
-				switch scope.BinInfo.Arch.Name {
-				case "amd64":
-					regs, _ := curthread.Registers()
-					setSP(curthread, regs.SP()+uint64(scope.BinInfo.Arch.PtrSize()))
-					setPC(curthread, fncall.undoInjection.oldpc)
-				case "arm64", "ppc64le":
-					setLR(curthread, fncall.undoInjection.oldlr)
-					setPC(curthread, fncall.undoInjection.oldpc)
-				default:
-					panic("not implemented")
-				}
+			// setTargetExecuted is set if evalop.CallInjectionSetTarget has been
+			// executed but evalop.CallInjectionComplete hasn't, we must undo the callOP
+			// call in evalop.CallInjectionSetTarget before continuing.
+			switch scope.BinInfo.Arch.Name {
+			case "amd64":
+				regs, _ := curthread.Registers()
+				setSP(curthread, regs.SP()+uint64(scope.BinInfo.Arch.PtrSize()))
+				setPC(curthread, fncall.undoInjection.oldpc)
+			case "arm64", "ppc64le":
+				setLR(curthread, fncall.undoInjection.oldlr)
+				setPC(curthread, fncall.undoInjection.oldpc)
+			default:
+				panic("not implemented")
 			}
 		}
 		stack.lastRetiredFncall = fncall
@@ -1159,11 +1122,6 @@ func (stack *evalStack) executeOp() {
 	case *evalop.Pop:
 		stack.pop()
 
-	case *evalop.Roll:
-		rolled := stack.stack[len(stack.stack)-op.N-1]
-		copy(stack.stack[len(stack.stack)-op.N-1:], stack.stack[len(stack.stack)-op.N:])
-		stack.stack[len(stack.stack)-1] = rolled
-
 	case *evalop.BuiltinCall:
 		vars := make([]*Variable, len(op.Args))
 		for i := len(op.Args) - 1; i >= 0; i-- {
@@ -1186,28 +1144,8 @@ func (stack *evalStack) executeOp() {
 		stack.err = funcCallCopyOneArg(scope, fncall, actualArg, &fncall.formalArgs[op.ArgNum], curthread)
 
 	case *evalop.CallInjectionComplete:
-		fncall := stack.fncallPeek()
-		fncall.doPinning = op.DoPinning
-		if op.DoPinning {
-			fncall.undoInjection.doComplete2 = true
-		} else {
-			fncall.undoInjection = nil
-		}
+		stack.fncallPeek().undoInjection = nil
 		stack.callInjectionContinue = true
-
-	case *evalop.CallInjectionComplete2:
-		fncall := stack.fncallPeek()
-		if len(fncall.addrsToPin) != 0 {
-			stack.err = fmt.Errorf("internal debugger error: CallInjectionComplete2 called when there still are addresses to pin")
-		}
-		fncall.undoInjection = nil
-		regs, err := curthread.Registers()
-		if err == nil {
-			callInjectionComplete2(scope, scope.BinInfo, fncall, regs, curthread)
-			stack.callInjectionContinue = true
-		} else {
-			stack.err = err
-		}
 
 	case *evalop.CallInjectionStartSpecial:
 		stack.callInjectionContinue = scope.callInjectionStartSpecial(stack, op, curthread)
@@ -1219,26 +1157,6 @@ func (stack *evalStack) executeOp() {
 		lhv := stack.pop()
 		rhv := stack.pop()
 		stack.err = scope.setValue(lhv, rhv, exprToString(op.Rhe))
-
-	case *evalop.PushPinAddress:
-		debugPinCount++
-		fncall := stack.fncallPeek()
-		addrToPin := fncall.addrsToPin[len(fncall.addrsToPin)-1]
-		fncall.addrsToPin = fncall.addrsToPin[:len(fncall.addrsToPin)-1]
-		typ, err := scope.BinInfo.findType("unsafe.Pointer")
-		if ptyp, ok := typ.(*godwarf.PtrType); err == nil && ok {
-			v := newVariable("", 0, typ, scope.BinInfo, scope.Mem)
-			v.Children = []Variable{*(newVariable("", uint64(addrToPin), ptyp.Type, scope.BinInfo, scope.Mem))}
-			stack.push(v)
-		} else {
-			stack.err = fmt.Errorf("can not pin address: %v", err)
-		}
-
-	case *evalop.SetDebugPinner:
-		stack.debugPinner = stack.pop()
-
-	case *evalop.PushDebugPinner:
-		stack.push(stack.debugPinner)
 
 	default:
 		stack.err = fmt.Errorf("internal debugger error: unknown eval opcode: %#v", op)
@@ -1340,7 +1258,7 @@ func (stack *evalStack) pushIdent(scope *EvalScope, name string) (found bool) {
 }
 
 func (scope *EvalScope) evalAST(t ast.Expr) (*Variable, error) {
-	ops, err := evalop.CompileAST(scopeToEvalLookup{scope}, t, scope.evalopFlags())
+	ops, err := evalop.CompileAST(scopeToEvalLookup{scope}, t)
 	if err != nil {
 		return nil, err
 	}
@@ -1356,14 +1274,9 @@ func exprToString(t ast.Expr) string {
 }
 
 func (scope *EvalScope) evalJump(op *evalop.Jump, stack *evalStack) {
-	var x *Variable
-
-	switch op.When {
-	case evalop.JumpIfTrue, evalop.JumpIfFalse, evalop.JumpIfAllocStringChecksFail:
-		x = stack.peek()
-		if op.Pop {
-			stack.pop()
-		}
+	x := stack.peek()
+	if op.Pop {
+		stack.pop()
 	}
 
 	var v bool
@@ -1380,17 +1293,6 @@ func (scope *EvalScope) evalJump(op *evalop.Jump, stack *evalStack) {
 			return
 		}
 		return
-	case evalop.JumpAlways:
-		stack.opidx = op.Target - 1
-		return
-	case evalop.JumpIfPinningDone:
-		fncall := stack.fncallPeek()
-		if len(fncall.addrsToPin) == 0 {
-			stack.opidx = op.Target - 1
-		}
-		return
-	default:
-		panic("internal error, bad jump condition")
 	}
 
 	if x.Kind != reflect.Bool {

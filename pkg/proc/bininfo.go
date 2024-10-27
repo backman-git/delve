@@ -16,7 +16,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,7 +33,6 @@ import (
 	"github.com/go-delve/delve/pkg/internal/gosym"
 	"github.com/go-delve/delve/pkg/logflags"
 	"github.com/go-delve/delve/pkg/proc/debuginfod"
-	"github.com/go-delve/delve/pkg/proc/evalop"
 	"github.com/hashicorp/golang-lru/simplelru"
 )
 
@@ -106,13 +104,10 @@ type BinaryInfo struct {
 	// dwrapUnwrapCache caches unwrapping of defer wrapper functions (dwrap)
 	dwrapUnwrapCache map[uint64]*Function
 
-	moduleDataCache []ModuleData
-
 	// Go 1.17 register ABI is enabled.
 	regabi bool
 
-	debugPinnerFn *Function
-	logger        logflags.Logger
+	logger logflags.Logger
 }
 
 var (
@@ -131,7 +126,6 @@ var (
 		elf.EM_AARCH64: true,
 		elf.EM_386:     true,
 		elf.EM_PPC64:   true,
-		elf.EM_RISCV:   true,
 	}
 
 	supportedWindowsArch = map[_PEMachine]bool{
@@ -469,20 +463,13 @@ type compileUnit struct {
 	entry     *dwarf.Entry        // debug_info entry describing this compile unit
 	isgo      bool                // true if this is the go compile unit
 	lineInfo  *line.DebugLineInfo // debug_line segment associated with this compile unit
-	optimized optimizedFlags      // this compile unit is optimized
+	optimized bool                // this compile unit is optimized
 	producer  string              // producer attribute
 
 	offset dwarf.Offset // offset of the entry describing the compile unit
 
 	image *Image // parent image of this compilation unit.
 }
-
-type optimizedFlags uint8
-
-const (
-	optimizedInlined optimizedFlags = 1 << iota
-	optimizedOptimized
-)
 
 type fileLine struct {
 	file string
@@ -618,7 +605,7 @@ func (fn *Function) NameWithoutTypeParams() string {
 
 // Optimized returns true if the function was optimized by the compiler.
 func (fn *Function) Optimized() bool {
-	return fn.cu.optimized != 0
+	return fn.cu.optimized
 }
 
 // PrologueEndPC returns the PC just after the function prologue
@@ -815,8 +802,6 @@ func NewBinaryInfo(goos, goarch string) *BinaryInfo {
 		r.Arch = ARM64Arch(goos)
 	case "ppc64le":
 		r.Arch = PPC64LEArch(goos)
-	case "riscv64":
-		r.Arch = RISCV64Arch(goos)
 	}
 	return r
 }
@@ -1815,7 +1800,7 @@ func (bi *BinaryInfo) setGStructOffsetElf(image *Image, exe *elf.File, wg *sync.
 
 		bi.gStructOffset = tlsg.Value + uint64(bi.Arch.PtrSize()*2) + ((tls.Vaddr - uint64(bi.Arch.PtrSize()*2)) & (tls.Align - 1))
 
-	case elf.EM_PPC64, elf.EM_RISCV:
+	case elf.EM_PPC64:
 		_ = getSymbol(image, bi.logger, exe, "runtime.tls_g")
 
 	default:
@@ -2081,7 +2066,7 @@ func (bi *BinaryInfo) macOSDebugFrameBugWorkaround() {
 		}
 	} else {
 		prod := goversion.ParseProducer(bi.Producer())
-		if !prod.AfterOrEqual(goversion.GoVersion{Major: 1, Minor: 19, Rev: 3}) && !prod.IsOldDevel() {
+		if !prod.AfterOrEqual(goversion.GoVersion{Major: 1, Minor: 19, Rev: 3}) && !prod.IsDevel() {
 			bi.logger.Infof("debug_frame workaround not needed (version %q on %s)", bi.Producer(), bi.Arch.Name)
 			return
 		}
@@ -2303,7 +2288,7 @@ func loadBinaryInfoGoRuntimeCommon(bi *BinaryInfo, image *Image, cu *compileUnit
 		bi.Sources = append(bi.Sources, f)
 	}
 	sort.Strings(bi.Sources)
-	bi.Sources = slices.Compact(bi.Sources)
+	bi.Sources = uniq(bi.Sources)
 	return nil
 }
 
@@ -2487,18 +2472,9 @@ func (bi *BinaryInfo) loadDebugInfoMaps(image *Image, debugInfoBytes, debugLineB
 			if cu.isgo && cu.producer != "" {
 				semicolon := strings.Index(cu.producer, ";")
 				if semicolon < 0 {
-					cu.optimized = 0
-					if goversion.ProducerAfterOrEqual(cu.producer, 1, 10) {
-						cu.optimized = optimizedInlined | optimizedOptimized
-					}
+					cu.optimized = goversion.ProducerAfterOrEqual(cu.producer, 1, 10)
 				} else {
-					cu.optimized = optimizedInlined | optimizedOptimized
-					if strings.Contains(cu.producer[semicolon:], "-N") {
-						cu.optimized &^= optimizedOptimized
-					}
-					if strings.Contains(cu.producer[semicolon:], "-l") {
-						cu.optimized &^= optimizedInlined
-					}
+					cu.optimized = !strings.Contains(cu.producer[semicolon:], "-N") || !strings.Contains(cu.producer[semicolon:], "-l")
 					const regabi = " regabi"
 					if i := strings.Index(cu.producer[semicolon:], regabi); i > 0 {
 						i += semicolon
@@ -2542,7 +2518,7 @@ func (bi *BinaryInfo) loadDebugInfoMaps(image *Image, debugInfoBytes, debugLineB
 		}
 	}
 	sort.Strings(bi.Sources)
-	bi.Sources = slices.Compact(bi.Sources)
+	bi.Sources = uniq(bi.Sources)
 
 	if cont != nil {
 		cont()
@@ -2579,21 +2555,11 @@ func (bi *BinaryInfo) LookupFunc() map[string][]*Function {
 }
 
 func (bi *BinaryInfo) lookupOneFunc(name string) *Function {
-	if name == evalop.DebugPinnerFunctionName && bi.debugPinnerFn != nil {
-		return bi.debugPinnerFn
-	}
 	fns := bi.LookupFunc()[name]
 	if fns == nil {
 		return nil
 	}
-	if name == evalop.DebugPinnerFunctionName {
-		bi.debugPinnerFn = fns[0]
-	}
 	return fns[0]
-}
-
-func (bi *BinaryInfo) hasDebugPinner() bool {
-	return bi.lookupOneFunc(evalop.DebugPinnerFunctionName) != nil
 }
 
 // loadDebugInfoMapsCompileUnit loads entry from a single compile unit.
@@ -2874,6 +2840,21 @@ func (bi *BinaryInfo) loadDebugInfoMapsInlinedCalls(ctxt *loadDebugInfoMapsConte
 		}
 		reader.SkipChildren()
 	}
+}
+
+func uniq(s []string) []string {
+	if len(s) == 0 {
+		return s
+	}
+	src, dst := 1, 1
+	for src < len(s) {
+		if s[src] != s[dst-1] {
+			s[dst] = s[src]
+			dst++
+		}
+		src++
+	}
+	return s[:dst]
 }
 
 func (bi *BinaryInfo) expandPackagesInType(expr ast.Expr) {
