@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-delve/delve/pkg/dwarf/op"
-	"github.com/go-delve/delve/pkg/elfwriter"
-	"github.com/go-delve/delve/pkg/proc"
+	"github.com/backman-git/delve/pkg/dwarf/op"
+	"github.com/backman-git/delve/pkg/elfwriter"
+	"github.com/backman-git/delve/pkg/proc"
 )
 
 func platformFromNotes(notes []*note) (goos, goarch string, err error) {

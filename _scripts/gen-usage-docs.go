@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/go-delve/delve/cmd/dlv/cmds"
-	"github.com/go-delve/delve/cmd/dlv/cmds/helphelpers"
+	"github.com/backman-git/delve/cmd/dlv/cmds"
+	"github.com/backman-git/delve/cmd/dlv/cmds/helphelpers"
 	"github.com/spf13/cobra/doc"
 )
 

@@ -5,11 +5,11 @@ import (
 
 	sys "golang.org/x/sys/unix"
 
-	"github.com/go-delve/delve/pkg/dwarf/op"
-	"github.com/go-delve/delve/pkg/dwarf/regnum"
-	"github.com/go-delve/delve/pkg/proc"
-	"github.com/go-delve/delve/pkg/proc/amd64util"
-	"github.com/go-delve/delve/pkg/proc/linutil"
+	"github.com/backman-git/delve/pkg/dwarf/op"
+	"github.com/backman-git/delve/pkg/dwarf/regnum"
+	"github.com/backman-git/delve/pkg/proc"
+	"github.com/backman-git/delve/pkg/proc/amd64util"
+	"github.com/backman-git/delve/pkg/proc/linutil"
 )
 
 // setPC sets EIP to the value specified by 'pc'.

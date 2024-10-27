@@ -10,11 +10,11 @@ import (
 	"go/token"
 	"reflect"
 
-	"github.com/go-delve/delve/pkg/dwarf/godwarf"
-	"github.com/go-delve/delve/pkg/dwarf/op"
-	"github.com/go-delve/delve/pkg/dwarf/reader"
-	"github.com/go-delve/delve/pkg/goversion"
-	"github.com/go-delve/delve/pkg/proc/internal/ebpf"
+	"github.com/backman-git/delve/pkg/dwarf/godwarf"
+	"github.com/backman-git/delve/pkg/dwarf/op"
+	"github.com/backman-git/delve/pkg/dwarf/reader"
+	"github.com/backman-git/delve/pkg/goversion"
+	"github.com/backman-git/delve/pkg/proc/internal/ebpf"
 )
 
 const (

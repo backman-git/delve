@@ -7,7 +7,7 @@ import (
 	"testing"
 	"unsafe"
 
-	protest "github.com/go-delve/delve/pkg/proc/test"
+	protest "github.com/backman-git/delve/pkg/proc/test"
 )
 
 func ptrSizeByRuntimeArch() int {
@@ -161,20 +161,20 @@ func TestGenericFunctionParser(t *testing.T) {
 	// Normal parsing
 
 	var testCases = []struct{ name, pkg, rcv, base string }{
-		{"github.com/go-delve/delve.afunc", "github.com/go-delve/delve", "", "afunc"},
-		{"github.com/go-delve/delve..afunc", "github.com/go-delve/delve", "", "afunc"}, // malformed
-		{"github.com/go-delve/delve.afunc[some/[thing].el se]", "github.com/go-delve/delve", "", "afunc[some/[thing].el se]"},
-		{"github.com/go-delve/delve.Receiver.afunc", "github.com/go-delve/delve", "Receiver", "afunc"},
-		{"github.com/go-delve/delve.(*Receiver).afunc", "github.com/go-delve/delve", "(*Receiver)", "afunc"},
-		{"github.com/go-delve/delve.Receiver.afunc[some/[thing].el se]", "github.com/go-delve/delve", "Receiver", "afunc[some/[thing].el se]"},       // malformed
-		{"github.com/go-delve/delve.(*Receiver).afunc[some/[thing].el se]", "github.com/go-delve/delve", "(*Receiver)", "afunc[some/[thing].el se]"}, // malformed
-		{"github.com/go-delve/delve.Receiver[some/[thing].el se].afunc", "github.com/go-delve/delve", "Receiver[some/[thing].el se]", "afunc"},
-		{"github.com/go-delve/delve.(*Receiver[some/[thing].el se]).afunc", "github.com/go-delve/delve", "(*Receiver[some/[thing].el se])", "afunc"},
+		{"github.com/backman-git/delve.afunc", "github.com/backman-git/delve", "", "afunc"},
+		{"github.com/backman-git/delve..afunc", "github.com/backman-git/delve", "", "afunc"}, // malformed
+		{"github.com/backman-git/delve.afunc[some/[thing].el se]", "github.com/backman-git/delve", "", "afunc[some/[thing].el se]"},
+		{"github.com/backman-git/delve.Receiver.afunc", "github.com/backman-git/delve", "Receiver", "afunc"},
+		{"github.com/backman-git/delve.(*Receiver).afunc", "github.com/backman-git/delve", "(*Receiver)", "afunc"},
+		{"github.com/backman-git/delve.Receiver.afunc[some/[thing].el se]", "github.com/backman-git/delve", "Receiver", "afunc[some/[thing].el se]"},       // malformed
+		{"github.com/backman-git/delve.(*Receiver).afunc[some/[thing].el se]", "github.com/backman-git/delve", "(*Receiver)", "afunc[some/[thing].el se]"}, // malformed
+		{"github.com/backman-git/delve.Receiver[some/[thing].el se].afunc", "github.com/backman-git/delve", "Receiver[some/[thing].el se]", "afunc"},
+		{"github.com/backman-git/delve.(*Receiver[some/[thing].el se]).afunc", "github.com/backman-git/delve", "(*Receiver[some/[thing].el se])", "afunc"},
 
-		{"github.com/go-delve/delve.afunc[.some/[thing].el se]", "github.com/go-delve/delve", "", "afunc[.some/[thing].el se]"},
-		{"github.com/go-delve/delve.Receiver.afunc[.some/[thing].el se]", "github.com/go-delve/delve", "Receiver", "afunc[.some/[thing].el se]"}, // malformed
-		{"github.com/go-delve/delve.Receiver[.some/[thing].el se].afunc", "github.com/go-delve/delve", "Receiver[.some/[thing].el se]", "afunc"},
-		{"github.com/go-delve/delve.(*Receiver[.some/[thing].el se]).afunc", "github.com/go-delve/delve", "(*Receiver[.some/[thing].el se])", "afunc"},
+		{"github.com/backman-git/delve.afunc[.some/[thing].el se]", "github.com/backman-git/delve", "", "afunc[.some/[thing].el se]"},
+		{"github.com/backman-git/delve.Receiver.afunc[.some/[thing].el se]", "github.com/backman-git/delve", "Receiver", "afunc[.some/[thing].el se]"}, // malformed
+		{"github.com/backman-git/delve.Receiver[.some/[thing].el se].afunc", "github.com/backman-git/delve", "Receiver[.some/[thing].el se]", "afunc"},
+		{"github.com/backman-git/delve.(*Receiver[.some/[thing].el se]).afunc", "github.com/backman-git/delve", "(*Receiver[.some/[thing].el se])", "afunc"},
 	}
 
 	for _, tc := range testCases {

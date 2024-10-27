@@ -22,17 +22,17 @@ import (
 	"sync"
 	"time"
 
-	pdwarf "github.com/go-delve/delve/pkg/dwarf"
-	"github.com/go-delve/delve/pkg/dwarf/frame"
-	"github.com/go-delve/delve/pkg/dwarf/godwarf"
-	"github.com/go-delve/delve/pkg/dwarf/line"
-	"github.com/go-delve/delve/pkg/dwarf/loclist"
-	"github.com/go-delve/delve/pkg/dwarf/op"
-	"github.com/go-delve/delve/pkg/dwarf/reader"
-	"github.com/go-delve/delve/pkg/goversion"
-	"github.com/go-delve/delve/pkg/internal/gosym"
-	"github.com/go-delve/delve/pkg/logflags"
-	"github.com/go-delve/delve/pkg/proc/debuginfod"
+	pdwarf "github.com/backman-git/delve/pkg/dwarf"
+	"github.com/backman-git/delve/pkg/dwarf/frame"
+	"github.com/backman-git/delve/pkg/dwarf/godwarf"
+	"github.com/backman-git/delve/pkg/dwarf/line"
+	"github.com/backman-git/delve/pkg/dwarf/loclist"
+	"github.com/backman-git/delve/pkg/dwarf/op"
+	"github.com/backman-git/delve/pkg/dwarf/reader"
+	"github.com/backman-git/delve/pkg/goversion"
+	"github.com/backman-git/delve/pkg/internal/gosym"
+	"github.com/backman-git/delve/pkg/logflags"
+	"github.com/backman-git/delve/pkg/proc/debuginfod"
 	"github.com/hashicorp/golang-lru/simplelru"
 )
 
@@ -76,7 +76,7 @@ type BinaryInfo struct {
 
 	// PackageMap maps package names to package paths, needed to lookup types inside DWARF info.
 	// On Go1.12 this mapping is determined by using the last element of a package path, for example:
-	//   github.com/go-delve/delve
+	//   github.com/backman-git/delve
 	// will map to 'delve' because it ends in '/delve'.
 	// Starting with Go1.13 debug_info will contain a special attribute
 	// (godwarf.AttrGoPackageName) containing the canonical package name for
@@ -2142,7 +2142,7 @@ func (bi *BinaryInfo) macOSDebugFrameBugWorkaround() {
 // unreadable.
 // This bug only manifests on macOS 15 because the C toolchain of prior
 // versions of the operating system did not emit problematic DWARF sections.
-// See also https://github.com/go-delve/delve/issues/3797
+// See also https://github.com/backman-git/delve/issues/3797
 func macOSShortSectionNamesWorkaround(exe *macho.File) {
 	for _, sec := range exe.Sections {
 		if sec == nil {

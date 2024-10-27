@@ -1,8 +1,8 @@
 package native
 
 import (
-	"github.com/go-delve/delve/pkg/proc"
-	"github.com/go-delve/delve/pkg/proc/winutil"
+	"github.com/backman-git/delve/pkg/proc"
+	"github.com/backman-git/delve/pkg/proc/winutil"
 )
 
 func newContext() *winutil.ARM64CONTEXT {

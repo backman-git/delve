@@ -38,7 +38,7 @@ Tests skipped by each supported backend:
 * windows skipped = 7
 	* 1 broken
 	* 2 not working on windows
-	* 4 see https://github.com/go-delve/delve/issues/2768
+	* 4 see https://github.com/backman-git/delve/issues/2768
 * windows/arm64 skipped = 5
 	* 3 broken
 	* 1 broken - cgo stacktraces

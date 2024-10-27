@@ -10,10 +10,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-delve/delve/pkg/elfwriter"
-	"github.com/go-delve/delve/pkg/proc"
-	"github.com/go-delve/delve/pkg/proc/amd64util"
-	"github.com/go-delve/delve/pkg/proc/linutil"
+	"github.com/backman-git/delve/pkg/elfwriter"
+	"github.com/backman-git/delve/pkg/proc"
+	"github.com/backman-git/delve/pkg/proc/amd64util"
+	"github.com/backman-git/delve/pkg/proc/linutil"
 )
 
 // Copied from golang.org/x/sys/unix.Timeval since it's not available on all

@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/go-delve/delve/pkg/elfwriter"
-	"github.com/go-delve/delve/pkg/proc/linutil"
+	"github.com/backman-git/delve/pkg/elfwriter"
+	"github.com/backman-git/delve/pkg/proc/linutil"
 	"golang.org/x/sys/unix"
 )
 

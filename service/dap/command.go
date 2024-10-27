@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/go-delve/delve/pkg/config"
+	"github.com/backman-git/delve/pkg/config"
 	"github.com/google/go-dap"
 )
 

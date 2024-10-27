@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-delve/delve/pkg/gobuild"
-	protest "github.com/go-delve/delve/pkg/proc/test"
-	"github.com/go-delve/delve/service/api"
+	"github.com/backman-git/delve/pkg/gobuild"
+	protest "github.com/backman-git/delve/pkg/proc/test"
+	"github.com/backman-git/delve/service/api"
 )
 
 func TestDebugger_LaunchNoMain(t *testing.T) {
