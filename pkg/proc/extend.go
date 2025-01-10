@@ -41,9 +41,15 @@ func ReadVarEntry(entry *godwarf.Tree, image *Image) (name string, typ godwarf.T
 	return readVarEntry(entry, image)
 }
 
-func ConvertEntrytoVariable(entry reader.Variable, addr uint64, image *Image, bi *BinaryInfo, regs *op.DwarfRegisters) (*Variable, error) {
-	var mem MemoryReadWriter = &ProcMemory{}
-	// TODO Cache this part
+func ConvertEntrytoVariable(entry reader.Variable, addr uint64, image *Image, bi *BinaryInfo, regs *op.DwarfRegisters, dMem []byte, inReg bool) (*Variable, error) {
+	var mem MemoryReadWriter
+
+	mem = CreateLoadedCachedMemory(dMem[:])
+
+	if inReg {
+		mem = &ProcMemory{}
+	}
+
 	name, dt, err := ReadVarEntry(entry.Tree, image)
 	if err != nil {
 		return nil, err
